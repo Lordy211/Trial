@@ -1,0 +1,125 @@
+1. System Requirements Check
+
+Before starting, verify:
+
+nproc        # Should be >= 4
+free -h      # RAM >= 8GB
+df -h        # Disk >= 40GB
+ 2. Create Stack User (MANDATORY)
+
+DevStack must not run as root.
+
+sudo adduser stack
+sudo usermod -aG sudo stack
+
+Switch user:
+
+su - stack
+ 3. Install Dependencies
+sudo apt update
+sudo apt install -y git vim net-tools
+ 4. Clone DevStack
+git clone https://opendev.org/openstack/devstack.git
+cd devstack
+ 5. Configure local.conf (VERY IMPORTANT)
+
+Create the config file:
+
+vim local.conf
+
+Paste:
+
+[[local|localrc]]
+
+ADMIN_PASSWORD=Secr3tPass
+DATABASE_PASSWORD=$ADMIN_PASSWORD
+RABBIT_PASSWORD=$ADMIN_PASSWORD
+SERVICE_PASSWORD=$ADMIN_PASSWORD
+
+HOST_IP=192.168.56.101   # Replace with your VM IP
+
+# Networking
+FLOATING_RANGE=192.168.56.0/24
+FIXED_RANGE=10.0.0.0/24
+FIXED_NETWORK_SIZE=256
+
+# Logging
+LOGFILE=/opt/stack/logs/stack.sh.log
+
+# Enable services
+ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-cpu,n-cond,n-sch,n-novnc,n-cauth,horizon,mysql,rabbit,q-svc,q-agt,q-dhcp,q-l3,q-meta,cinder,c-api,c-vol,c-sch
+
+Get your VM IP:
+
+ip a
+ 6. Run DevStack
+./stack.sh
+
+ Takes 20–40 minutes
+
+If successful, you’ll see:
+
+Horizon is now available at http://<HOST_IP>/dashboard
+ 7. Access OpenStack Dashboard (Horizon)
+
+Open browser:
+
+http://<HOST_IP>/dashboard
+
+Login:
+
+Username: admin
+Password: Secr3tPass
+ Core OpenStack Components (Important for Exams)
+Component	Purpose
+Keystone	Identity & authentication
+Nova	Compute (VM instances)
+Neutron	Networking
+Glance	Image service
+Cinder	Block storage
+Horizon	Web dashboard
+ 8. Basic Operations
+ A. Create Network
+
+Dashboard:
+
+Project → Network → Create Network
+
+CLI:
+
+source openrc admin admin
+
+openstack network create private-net
+openstack subnet create private-subnet \
+  --network private-net \
+  --subnet-range 10.0.0.0/24
+ B. Launch Instance (VM)
+Go to Compute → Instances → Launch Instance
+Choose:
+Image: Cirros / Ubuntu
+Flavor: m1.small
+Network: private-net
+
+CLI:
+
+openstack server create \
+  --image cirros \
+  --flavor m1.small \
+  --network private-net \
+  test-instance
+ C. Create Volume (Cinder)
+openstack volume create --size 1 test-volume
+
+Attach:
+
+openstack server add volume test-instance test-volume
+ D. Assign Floating IP
+openstack floating ip create public
+openstack server add floating ip test-instance <IP>
+
+sudo systemctl restart apache2
+
+
+👉 Must match:
+
+ip a
