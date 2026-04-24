@@ -1,0 +1,137 @@
+ Step 1: Install Docker (All Nodes)
+sudo apt update
+sudo apt install -y docker.io
+sudo systemctl enable docker
+sudo systemctl start docker
+
+(Optional but clean)
+
+sudo usermod -aG docker $USER
+newgrp docker
+ Step 2: Initialize Swarm (Manager)
+docker swarm init --advertise-addr 192.168.56.101
+
+ You’ll get a join token
+
+ Step 3: Join Workers
+
+Run the command shown on:
+
+Worker1
+Worker2
+
+Example:
+
+docker swarm join --token <TOKEN> 192.168.56.101:2377
+ Verify Cluster
+
+On manager:
+
+docker node ls
+
+You should see:
+
+1 Leader
+2 Workers
+ Step 4: Create Stack File
+
+Create docker-compose.yml:
+
+version: '3.8'
+
+services:
+  web:
+    image: nginx
+    ports:
+      - "80:80"
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+ Step 5: Deploy Stack
+docker stack deploy -c docker-compose.yml mystack
+
+Check:
+
+docker service ls
+docker service ps mystack_web
+ Step 6: Manual Scaling (Baseline)
+docker service scale mystack_web=5
+
+ This is important before auto-scaling—understand replica control.
+
+ Step 7: Implement Auto-Scaling (Core of Lab)
+
+Since Swarm lacks native autoscaling, we create a CPU-based scaling script.
+
+ Approach
+Monitor CPU usage
+If CPU > threshold → scale up
+If CPU < threshold → scale down
+ Install Monitoring Tool
+
+On manager:
+
+sudo apt install -y sysstat
+ Auto-Scaling Script
+
+Create autoscale.sh:
+
+#!/bin/bash
+
+SERVICE="mystack_web"
+MAX=6
+MIN=1
+THRESHOLD_UP=70
+THRESHOLD_DOWN=20
+
+CPU=$(top -bn1 | grep "Cpu(s)" | awk '{print 100 - $8}')
+
+CURRENT=$(docker service ls | grep $SERVICE | awk '{print $4}' | cut -d/ -f1)
+
+echo "CPU: $CPU%, Replicas: $CURRENT"
+
+if (( $(echo "$CPU > $THRESHOLD_UP" | bc -l) )); then
+    if [ "$CURRENT" -lt "$MAX" ]; then
+        NEW=$((CURRENT+1))
+        docker service scale $SERVICE=$NEW
+        echo "Scaling UP to $NEW"
+    fi
+fi
+
+if (( $(echo "$CPU < $THRESHOLD_DOWN" | bc -l) )); then
+    if [ "$CURRENT" -gt "$MIN" ]; then
+        NEW=$((CURRENT-1))
+        docker service scale $SERVICE=$NEW
+        echo "Scaling DOWN to $NEW"
+    fi
+fi
+ Make it executable
+chmod +x autoscale.sh
+ Run Every 30 Seconds
+watch -n 30 ./autoscale.sh
+
+OR cron job:
+
+crontab -e
+
+Add:
+
+* * * * * /path/to/autoscale.sh
+Step 8: Simulate Load
+
+Install stress tool:
+
+sudo apt install -y stress
+
+Generate CPU load:
+
+stress --cpu 2 --timeout 60
+
+👉 Watch:
+
+docker service ls
