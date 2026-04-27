@@ -1,0 +1,41 @@
+#server.py
+import asyncio
+from aiocoap import resource, Context, Message, Code
+
+class HelloResource(resource.Resource):
+    async def render_get(self, request):
+        payload = "Hello from Secure CoAP Server!".encode('utf-8')
+        return Message(payload=payload)
+
+async def main():
+    root = resource.Site()
+    root.add_resource(['hello'], HelloResource())
+
+    await Context.create_server_context(root)
+
+    print("CoAP Server running...")
+    await asyncio.get_running_loop().create_future()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+pip install aiocoap
+
+
+#client.py
+import asyncio
+from aiocoap import Context, Message, GET
+
+async def main():
+    protocol = await Context.create_client_context()
+
+    request = Message(code=GET, uri='coap://localhost/hello')
+
+    try:
+        response = await protocol.request(request).response
+        print("Response:", response.payload.decode())
+    except Exception as e:
+        print("Failed:", e)
+
+if __name__ == "__main__":
+    asyncio.run(main())
