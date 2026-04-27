@@ -1,1 +1,55 @@
 
+openssl req -x509 -newkey rsa:1024 -keyout key.pem -out cert.pem -days 365 -nodes
+
+
+Create weak_tls_server.py:
+
+import socket
+import ssl
+
+HOST = '127.0.0.1'
+PORT = 8443
+
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+
+
+context.set_ciphers('DHE-RSA-EXPORT')
+
+context.load_cert_chain(certfile='cert.pem', keyfile='key.pem')
+
+sock = socket.socket()
+sock.bind((HOST, PORT))
+sock.listen(5)
+
+print("Weak TLS Server running...")
+
+with context.wrap_socket(sock, server_side=True) as ssock:
+    conn, addr = ssock.accept()
+    print("Connected:", addr)
+    conn.send(b"Hello from weak TLS server")
+    conn.close()
+
+
+python weak_tls_server.py
+
+
+Create tls_client.py:
+
+import socket
+import ssl
+
+HOST = '127.0.0.1'
+PORT = 8443
+
+context = ssl.create_default_context()
+
+# Allow weak cipher (for experiment)
+context.set_ciphers('DHE-RSA-EXPORT')
+
+with socket.create_connection((HOST, PORT)) as sock:
+    with context.wrap_socket(sock, server_hostname=HOST) as ssock:
+        print("Connected using:", ssock.cipher())
+        data = ssock.recv(1024)
+        print("Received:", data.decode())
+
+python tls_client.py
