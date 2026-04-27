@@ -1,0 +1,115 @@
+
+Step 1: Install Libraries
+!pip install numpy matplotlib scikit-learn scipy
+Step 2: Simulate PUF Devices
+
+We simulate an Arbiter PUF–like behavior using random weights.
+
+import numpy as np
+
+NUM_DEVICES = 20
+CHALLENGE_SIZE = 32
+NUM_CHALLENGES = 200
+
+def generate_puf():
+    # Each device has unique internal delay parameters
+    return np.random.randn(CHALLENGE_SIZE)
+
+def generate_challenge():
+    return np.random.choice([-1, 1], size=CHALLENGE_SIZE)
+
+def get_response(puf, challenge, noise=0.0):
+    val = np.dot(puf, challenge) + np.random.normal(0, noise)
+    return 1 if val > 0 else 0
+
+# Create devices
+pufs = [generate_puf() for _ in range(NUM_DEVICES)]
+Step 3: 
+CRPs = []
+
+for device_id, puf in enumerate(pufs):
+    for _ in range(NUM_CHALLENGES):
+        c = generate_challenge()
+        r = get_response(puf, c)
+        CRPs.append((device_id, c, r))
+
+Step 4: Reliability (Noise Stability)
+
+Same challenge → same response?
+
+def reliability_test(puf, trials=50, noise=0.2):
+    c = generate_challenge()
+    responses = [get_response(puf, c, noise) for _ in range(trials)]
+    return sum(responses) / trials
+
+reliability_scores = [reliability_test(p) for p in pufs]
+
+print("Reliability (closer to 0 or 1 = stable):")
+print(reliability_scores[:5])
+
+
+Step 5: Uniqueness (Inter-device Variation)
+
+Compare responses of different devices to same challenge.
+
+def uniqueness_test(pufs):
+    c = generate_challenge()
+    responses = [get_response(p, c) for p in pufs]
+    
+    diff = 0
+    total = 0
+    
+    for i in range(len(responses)):
+        for j in range(i+1, len(responses)):
+            diff += responses[i] != responses[j]
+            total += 1
+            
+    return diff / total
+
+uniqueness = uniqueness_test(pufs)
+print("Uniqueness:", uniqueness)
+
+
+
+Step 6: Environmental Variation (Noise Impact)
+noise_levels = [0.0, 0.1, 0.2, 0.5]
+results = []
+
+for noise in noise_levels:
+    scores = [reliability_test(p, noise=noise) for p in pufs]
+    results.append(np.mean(scores))
+
+print("Noise vs Reliability:", list(zip(noise_levels, results)))
+
+
+
+Step 7:
+from scipy.stats import entropy
+
+def entropy_test(puf):
+    responses = [get_response(puf, generate_challenge()) for _ in range(200)]
+    p0 = responses.count(0)/len(responses)
+    p1 = responses.count(1)/len(responses)
+    
+    return entropy([p0, p1], base=2)
+
+entropy_scores = [entropy_test(p) for p in pufs]
+print("Entropy:", entropy_scores[:5])
+
+# Enroll phase
+database = {}
+
+for device_id, puf in enumerate(pufs):
+    c = generate_challenge()
+    r = get_response(puf, c)
+    database[device_id] = (c, r)
+
+# Verify phase
+def authenticate(device_id, puf, noise=0.1):
+    c, stored_r = database[device_id]
+    new_r = get_response(puf, c, noise)
+    return stored_r == new_r
+
+print("Authentication Test:")
+for i in range(5):
+    print(f"Device {i}:", authenticate(i, pufs[i]))
