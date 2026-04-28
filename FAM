@@ -1,0 +1,133 @@
+Step 1: Install Required Packages
+Bash
+sudo apt update
+sudo apt install mosquitto mosquitto-clients
+pip install paho-mqtt pandas numpy
+
+
+Step 2: Start Mosquitto Broker
+Bash
+mosquitto -v
+
+Step 3: Simulate Normal IoT Publisher
+Create normal_pub.py:
+Python
+import paho.mqtt.client as mqtt
+import time
+import random
+
+client = mqtt.Client()
+client.connect("localhost", 1883)
+
+while True:
+    msg = f"Temp:{random.randint(20,30)}"
+    client.publish("iot/sensor", msg)
+    time.sleep(2)   # normal interval
+
+Step 4: Simulate Abnormal IoT Publisher
+
+Create attack_pub.py:
+Python
+import paho.mqtt.client as mqtt
+import time
+
+client = mqtt.Client()
+client.connect("localhost", 1883)
+
+# Flooding attack (very small delay)
+for i in range(200):
+    client.publish("iot/sensor", f"Attack:{i}")
+    time.sleep(0.01)
+
+Step 5: Subscriber + Data Logger
+
+Create subscriber_logger.py:
+Python
+import paho.mqtt.client as mqtt
+import time
+import csv
+
+timestamps = []
+
+def on_message(client, userdata, msg):
+    t = time.time()
+    timestamps.append(t)
+    print("Received:", msg.payload.decode())
+
+client = mqtt.Client()
+client.connect("localhost", 1883)
+client.subscribe("iot/sensor")
+client.on_message = on_message
+
+print("Logging data...")
+client.loop_start()
+
+# Collect data for 30 seconds
+time.sleep(30)
+client.loop_stop()
+
+# Save timestamps
+with open("timestamps.csv", "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["timestamp"])
+    for t in timestamps:
+        writer.writerow([t])
+
+Step 6: Generate Data
+Run in separate terminals:
+Bash
+python subscriber_logger.py
+Then:
+Bash
+python normal_pub.py
+After some time, run:
+Bash
+python attack_pub.py
+Step 7: Feature Extraction & Anomaly Detection
+Create anomaly_detection.py:
+Python
+import pandas as pd
+import numpy as np
+
+# Load timestamps
+df = pd.read_csv("timestamps.csv")
+
+# Calculate inter-arrival time
+df['diff'] = df['timestamp'].diff()
+
+# Drop NaN
+df = df.dropna()
+
+# Compute statistics
+mean = df['diff'].mean()
+std = df['diff'].std()
+
+# Three-Sigma Rule
+upper = mean + 3*std
+lower = mean - 3*std
+
+print(f"Mean: {mean}")
+print(f"Std Dev: {std}")
+print(f"Upper Limit: {upper}")
+print(f"Lower Limit: {lower}")
+
+# Detect anomalies
+df['anomaly'] = (df['diff'] > upper) | (df['diff'] < lower)
+
+print("\nAnomalies detected:")
+print(df[df['anomaly']])
+Step 8: Run Detection
+Bash
+python anomaly_detection.py
+Expected Observation
+Normal Behavior:
+Inter-arrival time ≈ 2 seconds
+Stable pattern
+Abnormal Behavior:
+Inter-arrival time ≈ 0.01 seconds
+Sudden spike → detected as anomaly
+Result
+Simulated MQTT-based IoT communication
+Generated normal and abnormal traffic
+Extracted timing features (inter-arrival time)
+Detected anomalies using Three-Sigma rule
